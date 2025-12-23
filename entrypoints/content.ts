@@ -44,6 +44,56 @@ export default defineContentScript({
       pointer-events: auto;
     `;
 
+const PX_PER_INCH = 100; // 1 inch = 15px
+const HALF_INCH = 50
+
+/* ===== TICKS ===== */
+  for (let i = 0; i < window.innerWidth; i += 10) {
+    const tick = document.createElement("div");
+
+    let height = 5;
+    
+    if (i % PX_PER_INCH === 0) {
+      height = 15; // full inch
+    } else if (i % HALF_INCH === 0) {
+      height = 8; // half inch
+    }
+
+    tick.style.cssText = `
+      position: absolute;
+      left: ${i}px;
+      bottom: 0;
+      width: 1px;
+      height: ${height}px;
+      background: #000;
+    `;
+
+    hRuler.appendChild(tick);
+  }
+
+  for (let i = 0; i < window.innerWidth; i += 10) {
+    const tick = document.createElement("div");
+
+    let width = 5;
+    
+    if (i % PX_PER_INCH === 0) {
+      width = 15; // full inch
+    } else if (i % HALF_INCH === 0) {
+      width = 8; // half inch
+    }
+
+    tick.style.cssText = `
+      position: absolute;
+      bottom: ${i}px;
+      right: 0;
+      height: 1px;
+      width: ${width}px;
+      background: #000;
+    `;
+
+    vRuler.appendChild(tick);
+  }
+
     const intersection = document.createElement("div");
     intersection.style.cssText = `
       position: fixed;
