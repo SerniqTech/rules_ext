@@ -1,6 +1,7 @@
 export default defineContentScript({
   matches: ["<all_urls>"],
   main() {
+    let measurementMode = false;
     let measuring = false;
     let shiftPressed = false;
     let startX = 0;
@@ -124,18 +125,53 @@ const HALF_INCH = 50
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas);
 
-    /* ========== HORIZONTAL GUIDE ========== */
+    type GuideOrientation = "horizontal" | "vertical";
 
-    hRuler.addEventListener("mousedown", (e) => {
-      e.preventDefault();
+    const startGuideDrag = (
+      wrapper: HTMLDivElement,
+      orientation: GuideOrientation,
+      startEvent: MouseEvent,
+      fixedOffset?: number,
+    ) => {
+      startEvent.preventDefault();
+      startEvent.stopPropagation();
 
+      const cursor = orientation === "horizontal" ? "row-resize" : "col-resize";
+      const offset =
+        fixedOffset ??
+        (orientation === "horizontal"
+          ? startEvent.clientY - wrapper.getBoundingClientRect().top
+          : startEvent.clientX - wrapper.getBoundingClientRect().left);
+
+      const applyPosition = (ev: MouseEvent) => {
+        if (orientation === "horizontal") {
+          wrapper.style.top = `${ev.clientY - offset}px`;
+        } else {
+          wrapper.style.left = `${ev.clientX - offset}px`;
+        }
+      };
+
+      applyPosition(startEvent);
+
+      const move = (ev: MouseEvent) => applyPosition(ev);
+      const up = () => {
+        document.removeEventListener("mousemove", move);
+        document.body.style.cursor = "";
+      };
+
+      document.body.style.cursor = cursor;
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up, { once: true });
+    };
+
+    const createGuide = (orientation: GuideOrientation) => {
       const wrapper = document.createElement("div");
+      const isHorizontal = orientation === "horizontal";
+
       wrapper.style.cssText = `
         position: fixed;
-        left: 15px;
-        width: 100%;
-        height: 17px;
-        cursor: row-resize;
+        ${isHorizontal ? "left: 15px; width: 100%; height: 17px;" : "top: 15px; height: 100%; width: 17px;"}
+        cursor: ${isHorizontal ? "row-resize" : "col-resize"};
         pointer-events: auto;
         z-index: 999999999;
       `;
@@ -143,10 +179,7 @@ const HALF_INCH = 50
       const line = document.createElement("div");
       line.style.cssText = `
         position: absolute;
-        top: 8px;
-        left: 0;
-        width: 100%;
-        height: 1px;
+        ${isHorizontal ? "top: 8px; left: 0; width: 100%; height: 1px;" : "left: 8px; top: 0; height: 100%; width: 1px;"}
         background: #ff0000ff;
         box-shadow:
           0 0 4px rgba(255, 0, 0, 0.8),
@@ -154,85 +187,50 @@ const HALF_INCH = 50
       `;
 
       wrapper.appendChild(line);
+      wrapper.addEventListener("mousedown", (ev) => startGuideDrag(wrapper, orientation, ev));
+
+      return wrapper;
+    };
+
+    /* ========== HORIZONTAL GUIDE ========== */
+    hRuler.addEventListener("mousedown", (e) => {
+      const wrapper = createGuide("horizontal");
       overlay.appendChild(wrapper);
-
-      document.body.style.cursor = "row-resize";
-
-      const move = (ev: MouseEvent) => {
-        wrapper.style.top = `${ev.clientY - 8}px`; // 👈 GAP FIX
-      };
-
-      const up = () => {
-        document.removeEventListener("mousemove", move);
-        document.removeEventListener("mouseup", up);
-        document.body.style.cursor = "";
-      };
-
-      document.addEventListener("mousemove", move);
-      document.addEventListener("mouseup", up, { once: true });
+      startGuideDrag(wrapper, "horizontal", e, 8); 
     });
 
     /* ========== VERTICAL GUIDE ========= */
     vRuler.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-
-      const wrapper = document.createElement("div");
-      wrapper.style.cssText = `
-        position: fixed;
-        top: 15px;
-        height: 100%;
-        width: 17px;
-        cursor: col-resize;
-        pointer-events: auto;
-        z-index: 999999999;
-      `;
-
-      const line = document.createElement("div");
-      line.style.cssText = `
-        position: absolute;
-        left: 8px;
-        top: 0;
-        height: 100%;
-        width: 1px;
-        background: #ff0000ff;
-        box-shadow:
-          0 0 4px rgba(255, 0, 0, 0.8),
-          0 0 8px rgba(255, 0, 0, 0.6);
-      `;
-
-      wrapper.appendChild(line);
+      const wrapper = createGuide("vertical");
       overlay.appendChild(wrapper);
-
-      document.body.style.cursor = "col-resize";
-
-      const move = (ev: MouseEvent) => {
-        wrapper.style.left = `${ev.clientX - 8}px`; // 👈 GAP FIX
-      };
-
-      const up = () => {
-        document.removeEventListener("mousemove", move);
-        document.removeEventListener("mouseup", up);
-        document.body.style.cursor = "";
-      };
-
-      document.addEventListener("mousemove", move);
-      document.addEventListener("mouseup", up, { once: true });
+      startGuideDrag(wrapper, "vertical", e, 8); 
     });
 
     /* ================= MEASUREMENT MODE ================= */
+    const setMeasurementUi = () => {
+      intersection.style.background = measurementMode ? "#ffebee" : "white";
+      intersection.style.borderColor = measurementMode ? "#ff0000" : "black";
+      document.body.style.cursor = measurementMode ? "crosshair" : "";
+    };
+
     intersection.addEventListener("click", () => {
-      measuring = true;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      measurementMode = !measurementMode;
+      if (!measurementMode) {
+        measuring = false;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      setMeasurementUi();
     });
 
     document.addEventListener("mousedown", (e) => {
-      if (!measuring) return;
+      if (!measurementMode) return;
+      measuring = true;
       startX = e.clientX;
       startY = e.clientY;
     });
 
     document.addEventListener("mousemove", (e) => {
-      if (!measuring) return;
+      if (!measurementMode || !measuring) return;
 
       let x = e.clientX;
       let y = e.clientY;
@@ -257,17 +255,27 @@ const HALF_INCH = 50
     });
 
     document.addEventListener("mouseup", () => {
+      if (!measurementMode) return;
       measuring = false;
     });
 
     /* ================= KEYS ================= */
     document.addEventListener("keydown", (e) => {
       if (e.key === "Shift") shiftPressed = true;
-      if (e.key === "Escape") ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (e.key === "Escape") {
+        measurementMode = false;
+        measuring = false;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        setMeasurementUi();
+      }
     });
 
     document.addEventListener("keyup", (e) => {
       if (e.key === "Shift") shiftPressed = false;
     });
+
+    // Ensure UI reflects default state when script loads
+    setMeasurementUi();
   },
 });
+ 
