@@ -1,6 +1,26 @@
 export default defineContentScript({
   matches: ["<all_urls>"],
+  registration:'runtime',
   main() {
+    // If the content script already ran, a second click should clean it up.
+    if ((window as any).__gridRulerCleanup) {
+      (window as any).__gridRulerCleanup();
+      return;
+    }
+
+    const cleanupFns: Array<() => void> = [];
+    type ListenerTarget = Document | Window | HTMLElement;
+    const on = <E extends Event>(
+      target: ListenerTarget,
+      type: string,
+      handler: (ev: E) => void,
+      options?: boolean | AddEventListenerOptions,
+    ) => {
+      const listener = handler as EventListener;
+      target.addEventListener(type, listener, options);
+      cleanupFns.push(() => target.removeEventListener(type, listener, options));
+    };
+
     let measurementMode = false;
     let measuring = false;
     let shiftPressed = false;
@@ -123,7 +143,7 @@ const HALF_INCH = 50
       canvas.height = window.innerHeight;
     };
     resizeCanvas();
-    window.addEventListener("resize", resizeCanvas);
+    on(window, "resize", resizeCanvas);
 
     type GuideOrientation = "horizontal" | "vertical";
 
@@ -160,8 +180,8 @@ const HALF_INCH = 50
       };
 
       document.body.style.cursor = cursor;
-      document.addEventListener("mousemove", move);
-      document.addEventListener("mouseup", up, { once: true });
+      on(document, "mousemove", move);
+      on(document, "mouseup", up, { once: true });
     };
 
     const createGuide = (orientation: GuideOrientation) => {
@@ -193,14 +213,14 @@ const HALF_INCH = 50
     };
 
     /* ========== HORIZONTAL GUIDE ========== */
-    hRuler.addEventListener("mousedown", (e) => {
+    on<MouseEvent>(hRuler, "mousedown", (e) => {
       const wrapper = createGuide("horizontal");
       overlay.appendChild(wrapper);
       startGuideDrag(wrapper, "horizontal", e, 8); 
     });
 
     /* ========== VERTICAL GUIDE ========= */
-    vRuler.addEventListener("mousedown", (e) => {
+    on<MouseEvent>(vRuler, "mousedown", (e) => {
       const wrapper = createGuide("vertical");
       overlay.appendChild(wrapper);
       startGuideDrag(wrapper, "vertical", e, 8); 
@@ -213,7 +233,7 @@ const HALF_INCH = 50
       document.body.style.cursor = measurementMode ? "crosshair" : "";
     };
 
-    intersection.addEventListener("click", () => {
+    on<MouseEvent>(intersection, "click", () => {
       measurementMode = !measurementMode;
       if (!measurementMode) {
         measuring = false;
@@ -222,14 +242,14 @@ const HALF_INCH = 50
       setMeasurementUi();
     });
 
-    document.addEventListener("mousedown", (e) => {
+    on<MouseEvent>(document, "mousedown", (e) => {
       if (!measurementMode) return;
       measuring = true;
       startX = e.clientX;
       startY = e.clientY;
     });
 
-    document.addEventListener("mousemove", (e) => {
+    on<MouseEvent>(document, "mousemove", (e) => {
       if (!measurementMode || !measuring) return;
 
       let x = e.clientX;
@@ -254,13 +274,13 @@ const HALF_INCH = 50
       ctx.fillText(`${dist}px`, x + 6, y - 6);
     });
 
-    document.addEventListener("mouseup", () => {
+    on<MouseEvent>(document, "mouseup", () => {
       if (!measurementMode) return;
       measuring = false;
     });
 
     /* ================= KEYS ================= */
-    document.addEventListener("keydown", (e) => {
+    on<KeyboardEvent>(document, "keydown", (e) => {
       if (e.key === "Shift") shiftPressed = true;
       if (e.key === "Escape") {
         measurementMode = false;
@@ -270,12 +290,19 @@ const HALF_INCH = 50
       }
     });
 
-    document.addEventListener("keyup", (e) => {
+    on<KeyboardEvent>(document, "keyup", (e) => {
       if (e.key === "Shift") shiftPressed = false;
     });
 
     // Ensure UI reflects default state when script loads
     setMeasurementUi();
+
+    (window as any).__gridRulerCleanup = () => {
+      cleanupFns.forEach((fn) => fn());
+      overlay.remove();
+      document.body.style.cursor = "";
+      delete (window as any).__gridRulerCleanup;
+    };
   },
 });
  

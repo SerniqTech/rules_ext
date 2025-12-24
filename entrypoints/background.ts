@@ -1,3 +1,10 @@
 export default defineBackground(() => {
-  console.log('Hello background!', { id: browser.runtime.id });
+  browser.action.onClicked.addListener(async (tab)=>{
+    if(!tab.id) return;
+
+    await browser.scripting.executeScript({
+      target:{tabId:tab.id},
+      files:['/content-scripts/content.js']
+    })
+  })
 });
