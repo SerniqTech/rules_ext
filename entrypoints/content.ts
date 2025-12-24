@@ -65,55 +65,72 @@ export default defineContentScript({
       pointer-events: auto;
     `;
 
-const PX_PER_INCH = 100; // 1 inch = 15px
+const PX_PER_INCH = 100;
 const HALF_INCH = 50
 
-/* ===== TICKS ===== */
-  for (let i = 0; i < window.innerWidth; i += 10) {
-    const tick = document.createElement("div");
+    /* ===== TICKS ===== */
 
-    let height = 5;
-    
-    if (i % PX_PER_INCH === 0) {
-      height = 15; // full inch
-    } else if (i % HALF_INCH === 0) {
-      height = 8; // half inch
+    function updateHorizontalRuler() {
+      hRuler.innerHTML = '';
+      for (let i = 0; i < window.innerWidth; i += 10) {
+        const tick = document.createElement("div");
+
+        let height = 5;
+
+        if (i % PX_PER_INCH === 0) {
+          height = 15; // full inch
+        } else if (i % HALF_INCH === 0) {
+          height = 8; // half inch
+        }
+
+        tick.style.cssText = `
+        position: absolute;
+        left: ${i}px;
+        bottom: 0;
+        width: 1px;
+        height: ${height}px;
+        background: #000;
+      `;
+
+        hRuler.appendChild(tick);
+      }
     }
 
-    tick.style.cssText = `
-      position: absolute;
-      left: ${i}px;
-      bottom: 0;
-      width: 1px;
-      height: ${height}px;
-      background: #000;
-    `;
+    function updateVerticalRuler() {
+      vRuler.innerHTML = '';
+      for (let i = 0; i < window.innerHeight; i += 10) {
+        const tick = document.createElement("div");
 
-    hRuler.appendChild(tick);
-  }
+        let width = 5;
 
-  for (let i = 0; i < window.innerWidth; i += 10) {
-    const tick = document.createElement("div");
+        if (i % PX_PER_INCH === 0) {
+          width = 15; // full inch
+        } else if (i % HALF_INCH === 0) {
+          width = 8; // half inch
+        }
 
-    let width = 5;
+        tick.style.cssText = `
+        position: absolute;
+        top: ${i}px;
+        right: 0;
+        height: 1px;
+        width: ${width}px;
+        background: #000;
+      `;
+
+        vRuler.appendChild(tick);
+      }
+    }
     
-    if (i % PX_PER_INCH === 0) {
-      width = 15; // full inch
-    } else if (i % HALF_INCH === 0) {
-      width = 8; // half inch
+    function updateRuler(){
+      updateHorizontalRuler();
+      updateVerticalRuler();
     }
 
-    tick.style.cssText = `
-      position: absolute;
-      bottom: ${i}px;
-      right: 0;
-      height: 1px;
-      width: ${width}px;
-      background: #000;
-    `;
+    updateRuler()
 
-    vRuler.appendChild(tick);
-  }
+    on(window,"resize",updateRuler)
+
 
     const intersection = document.createElement("div");
     intersection.style.cssText = `

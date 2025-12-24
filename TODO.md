@@ -9,3 +9,6 @@
 
 # commit code for no coding things
 ASSET
+
+# commit code for bugs
+- [x] BUG-1 scales are not perfectly aligned
