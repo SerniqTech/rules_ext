@@ -43,7 +43,7 @@ export default defineContentScript({
     hRuler.style.cssText = `
       position: fixed;
       top: 0;
-      left: 0;
+      left: 15px;
       height: 15px;
       width: 100%;
       background: white;
@@ -55,7 +55,7 @@ export default defineContentScript({
     const vRuler = document.createElement("div");
     vRuler.style.cssText = `
       position: fixed;
-      top: 0;
+      top: 15px;
       left: 0;
       width: 15px;
       height: 100%;
@@ -146,6 +146,7 @@ const HALF_INCH = 50
       cursor: crosshair;
       pointer-events: auto;
     `;
+    intersection.title = "Click here to switch measurement mode"
 
     overlay.append(hRuler, vRuler, intersection);
 
@@ -155,6 +156,14 @@ const HALF_INCH = 50
     overlay.appendChild(canvas);
 
     const ctx = canvas.getContext("2d")!;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.font = '24px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'left';
+
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -170,6 +179,7 @@ const HALF_INCH = 50
       startEvent: MouseEvent,
       fixedOffset?: number,
     ) => {
+      if (measurementMode) return;
       startEvent.preventDefault();
       startEvent.stopPropagation();
 
@@ -231,6 +241,7 @@ const HALF_INCH = 50
 
     /* ========== HORIZONTAL GUIDE ========== */
     on<MouseEvent>(hRuler, "mousedown", (e) => {
+      if (measurementMode) return;
       const wrapper = createGuide("horizontal");
       overlay.appendChild(wrapper);
       startGuideDrag(wrapper, "horizontal", e, 8); 
@@ -238,6 +249,7 @@ const HALF_INCH = 50
 
     /* ========== VERTICAL GUIDE ========= */
     on<MouseEvent>(vRuler, "mousedown", (e) => {
+      if (measurementMode) return;
       const wrapper = createGuide("vertical");
       overlay.appendChild(wrapper);
       startGuideDrag(wrapper, "vertical", e, 8); 
@@ -245,17 +257,19 @@ const HALF_INCH = 50
 
     /* ================= MEASUREMENT MODE ================= */
     const setMeasurementUi = () => {
-      intersection.style.background = measurementMode ? "#ffebee" : "white";
-      intersection.style.borderColor = measurementMode ? "#ff0000" : "black";
-      document.body.style.cursor = measurementMode ? "crosshair" : "";
+      intersection.style.background = measurementMode ? "#ff0000ff" : "white";
+      intersection.style.borderColor = measurementMode ? "#ff0000ff" : "black";
+      document.body.style.cursor = measurementMode ? "pointer !important" : "";
     };
 
     on<MouseEvent>(intersection, "click", () => {
       measurementMode = !measurementMode;
       if (!measurementMode) {
         measuring = false;
+        document.body.style.userSelect = 'all'
         ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
+      document.body.style.userSelect = 'none'
       setMeasurementUi();
     });
 
@@ -279,16 +293,85 @@ const HALF_INCH = 50
       }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw the main measurement line in turquoise
       ctx.beginPath();
       ctx.moveTo(startX, startY);
       ctx.lineTo(x, y);
-      ctx.strokeStyle = "#ff0000ff";
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = "#ff0000ff"; 
+      ctx.lineWidth = 1.5;
       ctx.stroke();
 
+      
+      const bracketLength = 8; 
+      const dx = x - startX;
+      const dy = y - startY;
+      const lineLength = Math.hypot(dx, dy);
+      
+      if (lineLength > 0) {
+        
+        const perpX = -dy / lineLength;
+        const perpY = dx / lineLength;
+        const halfBracket = bracketLength / 2;
+        
+        ctx.beginPath();
+        
+        ctx.moveTo(startX + perpX * halfBracket, startY + perpY * halfBracket);
+        ctx.lineTo(startX - perpX * halfBracket, startY - perpY * halfBracket);
+        
+        ctx.moveTo(x + perpX * halfBracket, y + perpY * halfBracket);
+        ctx.lineTo(x - perpX * halfBracket, y - perpY * halfBracket);
+        ctx.stroke();
+      }
+
+      // Calculate distance and prepare text
       const dist = Math.hypot(x - startX, y - startY).toFixed(0);
-      ctx.fillStyle = "#ff0000ff";
-      ctx.fillText(`${dist}px`, x + 6, y - 6);
+      const text = `${dist}px`;
+      
+      // Measure text for background sizing
+      const textMetrics = ctx.measureText(text);
+      const textWidth = textMetrics.width;
+      const textHeight = 16; // Approximate text height
+      const padding = 6;
+      const boxWidth = textWidth + padding * 2;
+      const boxHeight = textHeight + padding * 2;
+      
+      // Position text box above the end point
+      const boxX = x - boxWidth / 2; 
+      const boxY = y - boxHeight - 12; 
+      const borderRadius = 4;
+      
+      // Draw white rounded rectangle background - ensure fully opaque
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = "rgb(255, 255, 255)";
+      ctx.beginPath();
+      // Manually create rounded rectangle path to ensure proper filling
+      const rectX = boxX;
+      const rectY = boxY;
+      const rectW = boxWidth;
+      const rectH = boxHeight;
+      const rectR = borderRadius;
+      ctx.moveTo(rectX + rectR, rectY);
+      ctx.lineTo(rectX + rectW - rectR, rectY);
+      ctx.quadraticCurveTo(rectX + rectW, rectY, rectX + rectW, rectY + rectR);
+      ctx.lineTo(rectX + rectW, rectY + rectH - rectR);
+      ctx.quadraticCurveTo(rectX + rectW, rectY + rectH, rectX + rectW - rectR, rectY + rectH);
+      ctx.lineTo(rectX + rectR, rectY + rectH);
+      ctx.quadraticCurveTo(rectX, rectY + rectH, rectX, rectY + rectH - rectR);
+      ctx.lineTo(rectX, rectY + rectR);
+      ctx.quadraticCurveTo(rectX, rectY, rectX + rectR, rectY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      
+      // Draw black text
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "rgba(0, 0, 0, 1)";
+      ctx.fillText(text, boxX + padding, boxY + textHeight + padding / 2);
+      ctx.restore();
     });
 
     on<MouseEvent>(document, "mouseup", () => {

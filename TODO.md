@@ -12,3 +12,4 @@ ASSET
 
 # commit code for bugs
 - [x] BUG-1 scales are not perfectly aligned
+- [x] BUG-2 measurement mode bugs
