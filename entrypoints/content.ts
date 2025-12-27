@@ -1,5 +1,4 @@
 export default defineContentScript({
-  matches: ["<all_urls>"],
   registration:'runtime',
   main() {
     // If the content script already ran, a second click should clean it up.
